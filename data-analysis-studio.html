@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Analysis Studio</title>
+
+<!-- External CDN libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PptxGenJS/3.12.0/pptxgen.bundle.js"></script>
+<!-- docx.js via unpkg (browser UMD build) -->
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<!-- FileSaver for reliable file downloads -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<style>
+  /* ── Reset & Base ─────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:   #0C447C;
+    --blue:   #185FA5;
+    --mid:    #378ADD;
+    --lt:     #E6F1FB;
+    --teal:   #1D9E75;
+    --green:  #EAF3DE;
+    --amber:  #EF9F27;
+    --coral:  #D85A30;
+    --red:    #E24B4A;
+    --bg:     #F8F9FB;
+    --surface:#FFFFFF;
+    --border: #E2E6EC;
+    --text:   #1A2332;
+    --muted:  #64748B;
+    --faint:  #94A3B8;
+    --radius: 10px;
+    --shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04);
+  }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+
+  /* ── Layout ───────────────────────────────────── */
+  .app    { display: flex; flex-direction: column; height: 100vh; }
+  .topbar { height: 52px; background: var(--navy); display: flex; align-items: center; gap: 12px; padding: 0 20px; flex-shrink: 0; }
+  .topbar .logo { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .topbar .logo svg { opacity: .85; }
+  .topbar .pill { font-size: 11px; background: rgba(255,255,255,.15); color: rgba(255,255,255,.85); border-radius: 20px; padding: 2px 10px; }
+  .topbar .file-badge { margin-left: auto; font-size: 12px; color: rgba(255,255,255,.7); display: none; align-items: center; gap: 6px; }
+  .topbar .file-badge.show { display: flex; }
+  .body   { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Sidebar ──────────────────────────────────── */
+  .sidebar { width: 270px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 16px 14px; gap: 18px; }
+  .sec-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+
+  /* Upload */
+  .drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 22px 12px; text-align: center; cursor: pointer; transition: all .2s; }
+  .drop-zone:hover, .drop-zone.drag { border-color: var(--mid); background: var(--lt); }
+  .drop-zone svg { display: block; margin: 0 auto 8px; color: var(--faint); }
+  .drop-zone p  { font-size: 13px; color: var(--muted); }
+  .drop-zone small { font-size: 11px; color: var(--faint); }
+
+  /* Field selects */
+  .field-group { display: flex; flex-direction: column; gap: 8px; }
+  .field-row   { display: flex; flex-direction: column; gap: 3px; }
+  .field-row label { font-size: 11px; color: var(--muted); font-weight: 600; }
+  select, input[type=text] { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; color: var(--text); background: var(--bg); outline: none; transition: border .15s; }
+  select:focus, input[type=text]:focus { border-color: var(--mid); background: #fff; }
+
+  /* Chart type grid */
+  .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .type-btn  { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 4px 6px; cursor: pointer; text-align: center; font-size: 11px; color: var(--muted); transition: all .15s; }
+  .type-btn:hover { border-color: var(--mid); color: var(--text); }
+  .type-btn.active { border: 2px solid var(--mid); background: var(--lt); color: var(--blue); font-weight: 600; }
+  .type-btn svg { display: block; margin: 0 auto 4px; }
+
+  /* Style controls */
+  .style-row  { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .style-row input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--blue); cursor: pointer; }
+
+  /* Export buttons */
+  .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .exp-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 6px 8px; cursor: pointer; text-align: center; font-size: 11px; color: var(--muted); transition: all .15s; display: flex; flex-direction: column; align-items: center; gap: 4px; font-weight: 500; }
+  .exp-btn:hover { border-color: var(--mid); color: var(--blue); background: var(--lt); }
+  .exp-btn svg { color: inherit; }
+  .exp-btn.full { grid-column: span 2; flex-direction: row; justify-content: center; gap: 7px; padding: 9px; }
+  .exp-btn.pptx { border-color: #C55A11; color: #C55A11; }
+  .exp-btn.pptx:hover { background: #FFF4EE; border-color: #C55A11; }
+  .exp-btn.word { border-color: #2F5496; color: #2F5496; }
+  .exp-btn.word:hover { background: #EEF2FF; border-color: #2F5496; }
+
+  /* ── Main content ────────────────────────────── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Toolbar */
+  .toolbar { height: 48px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 0 16px; flex-shrink: 0; }
+  .run-btn { background: var(--blue); color: #fff; border: none; border-radius: 7px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; display: flex; align-items: center; gap: 6px; }
+  .run-btn:hover { background: var(--navy); }
+  .run-btn:disabled { background: var(--border); color: var(--faint); cursor: not-allowed; }
+  .filter-wrap { display: flex; align-items: center; gap: 6px; }
+  .filter-wrap input { width: 220px; font-size: 12px; }
+  .filter-wrap svg { color: var(--faint); flex-shrink: 0; }
+  .view-toggle { margin-left: auto; display: flex; gap: 4px; }
+  .vtbtn { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  .vtbtn.active { background: var(--lt); border-color: var(--mid); color: var(--blue); font-weight: 600; }
+
+  /* Canvas */
+  .canvas { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--faint); gap: 12px; min-height: 400px; }
+  .empty-state p { font-size: 14px; }
+
+  /* Stats */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); }
+  .stat-card .lbl { font-size: 11px; color: var(--faint); margin-bottom: 4px; font-weight: 600; letter-spacing: .04em; }
+  .stat-card .val { font-size: 22px; font-weight: 700; color: var(--text); }
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* Chart card */
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+  .chart-card .card-title { font-size: 14px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .badge { font-size: 10px; background: var(--lt); color: var(--blue); border-radius: 20px; padding: 2px 10px; font-weight: 600; }
+  .chart-container { position: relative; height: 360px; }
+
+  /* Table */
+  .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .table-card .card-title { font-size: 14px; font-weight: 700; color: var(--text); display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .table-scroll { overflow: auto; max-height: 300px; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { position: sticky; top: 0; background: var(--bg); padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .data-table td { padding: 6px 12px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--lt); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: #f1f5f9; padding: 10px 18px; border-radius: 10px; font-size: 13px; z-index: 9999; display: none; align-items: center; gap: 8px; box-shadow: 0 8px 32px rgba(0,0,0,.18); animation: slideUp .25s ease; }
+  .toast.show { display: flex; }
+  .toast.error { background: #7f1d1d; }
+  @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* Loading overlay */
+  .loading { position: fixed; inset: 0; background: rgba(255,255,255,.85); display: none; align-items: center; justify-content: center; z-index: 1000; flex-direction: column; gap: 16px; }
+  .loading.show { display: flex; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--mid); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { color: var(--muted); font-size: 14px; font-weight: 500; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .body { flex-direction: column; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Data Analysis Studio
+    </div>
+    <span class="pill">Industrial Edition</span>
+    <div class="file-badge" id="fileBadge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span id="fileBadgeText"></span>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+
+      <!-- 1. Data Source -->
+      <div>
+        <div class="sec-label">1 · Data Source</div>
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" role="button" tabindex="0" aria-label="Upload spreadsheet">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          <p>Drop Excel or CSV here</p>
+          <small>.xlsx · .xls · .csv supported</small>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" aria-label="File input">
+      </div>
+
+      <!-- 2. Fields -->
+      <div id="fieldSection" style="display:none">
+        <div class="sec-label">2 · Fields</div>
+        <div class="field-group">
+          <div class="field-row">
+            <label>X axis / Label</label>
+            <select id="xField"></select>
+          </div>
+          <div class="field-row">
+            <label>Y axis / Value</label>
+            <select id="yField"></select>
+          </div>
+          <div class="field-row">
+            <label>Group / Segment <span style="color:var(--faint);font-weight:400">(optional)</span></label>
+            <select id="groupField"><option value="">— None —</option></select>
+          </div>
+          <div class="field-row">
+            <label>Aggregation</label>
+            <select id="aggMethod" onchange="renderChart()">
+              <option value="sum">Sum</option>
+              <option value="avg">Average</option>
+              <option value="count">Count</option>
+              <option value="max">Max</option>
+              <option value="min">Min</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Chart Type -->
+      <div>
+        <div class="sec-label">3 · Chart Type</div>
+        <div class="type-grid">
+          <button class="type-btn active" data-type="bar" onclick="setChart('bar',this)" aria-pressed="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="4" height="11"/><rect x="10" y="5" width="4" height="16"/><rect x="17" y="13" width="4" height="8"/></svg>
+            Bar
+          </button>
+          <button class="type-btn" data-type="pie" onclick="setChart('pie',this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+            Pie
+          </button>
+          <button class="type-btn" data-type="line" onclick="setChart('line',this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Line
+          </button>
+          <button class="type-btn" data-type="doughnut" onclick="setChart('doughnut',this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+            Doughnut
+          </button>
+          <button class="type-btn" data-type="scatter" onclick="setChart('scatter',this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="14" r="2"/><circle cx="15" cy="8" r="2"/><circle cx="17" cy="17" r="2"/><circle cx="5" cy="6" r="2"/></svg>
+            Scatter
+          </button>
+          <button class="type-btn" data-type="area" onclick="setChart('area',this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2 20 8 8 14 15 20 5"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+            Area
+          </button>
+          <button class="type-btn" data-type="horizontalBar" onclick="setChart('horizontalBar',this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="11" height="4"/><rect x="3" y="10" width="16" height="4"/><rect x="3" y="16" width="8" height="4"/></svg>
+            H-Bar
+          </button>
+          <button class="type-btn" data-type="radar" onclick="setChart('radar',this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 19 9 19 16 12 21 5 16 5 9"/><polygon points="12 6 16 10 16 14 12 17 8 14 8 10"/><line x1="12" y1="2" x2="12" y2="21"/></svg>
+            Radar
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. Style -->
+      <div>
+        <div class="sec-label">4 · Style</div>
+        <div class="field-group">
+          <div class="field-row">
+            <label>Chart title</label>
+            <input type="text" id="chartTitle" placeholder="e.g. Revenue by Region">
+          </div>
+          <div class="field-row">
+            <label>Color scheme</label>
+            <select id="colorScheme" onchange="renderChart()">
+              <option value="professional">Professional Blue</option>
+              <option value="vibrant">Vibrant Multi</option>
+              <option value="pastel">Pastel Soft</option>
+              <option value="monochrome">Monochrome</option>
+              <option value="sunset">Sunset Warm</option>
+              <option value="forest">Forest Green</option>
+              <option value="executive">Executive Dark</option>
+            </select>
+          </div>
+          <div class="style-row">
+            <input type="checkbox" id="showLegend" checked onchange="renderChart()">
+            <label for="showLegend">Show legend</label>
+          </div>
+          <div class="style-row">
+            <input type="checkbox" id="showGrid" checked onchange="renderChart()">
+            <label for="showGrid">Show grid</label>
+          </div>
+          <div class="style-row">
+            <input type="checkbox" id="showValues" onchange="renderChart()">
+            <label for="showValues">Show data labels</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Export -->
+      <div>
+        <div class="sec-label">5 · Export</div>
+        <div class="export-grid">
+          <button class="exp-btn" onclick="exportPNG()" title="Export chart as PNG image">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            PNG
+          </button>
+          <button class="exp-btn" onclick="exportCSV()" title="Export filtered data as CSV">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+            CSV
+          </button>
+          <button class="exp-btn pptx full" onclick="exportPPTX()" title="Export to PowerPoint presentation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Export to PowerPoint (.pptx)
+          </button>
+          <button class="exp-btn word full" onclick="exportWord()" title="Export to Word report">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="12" y2="9"/></svg>
+            Export Word Report (.docx)
+          </button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button class="run-btn" id="renderBtn" onclick="renderChart()" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.4"/></svg>
+          Render Chart
+        </button>
+        <div class="filter-wrap" id="filterWrap" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          <input type="text" id="filterInput" placeholder="Filter: >100, <50, contains 'apple'…" oninput="applyFilter()">
+        </div>
+        <div class="view-toggle" id="viewToggle" style="display:none">
+          <button class="vtbtn active" id="vChart" onclick="toggleView('chart')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="4" height="11"/><rect x="10" y="5" width="4" height="16"/><rect x="17" y="13" width="4" height="8"/></svg>
+            Chart
+          </button>
+          <button class="vtbtn" id="vTable" onclick="toggleView('table')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            Table
+          </button>
+        </div>
+      </div>
+
+      <!-- Canvas -->
+      <div class="canvas" id="canvasArea">
+        <div class="empty-state" id="emptyState">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Upload a spreadsheet to begin</p>
+          <small style="font-size:12px">Excel (.xlsx / .xls) or CSV files supported</small>
+        </div>
+        <div class="stats-row" id="statsRow" style="display:none"></div>
+        <div class="chart-card" id="chartCard" style="display:none">
+          <div class="card-title">
+            <span id="chartTitleDisplay">Chart</span>
+            <span class="badge" id="chartBadge">Bar</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="myChart"></canvas>
+          </div>
+        </div>
+        <div class="table-card" id="tableCard" style="display:none">
+          <div class="card-title">
+            <span>Data Preview</span>
+            <span class="badge" id="rowBadge">0 rows</span>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table" id="dataTable"></table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <p id="loadingMsg">Generating export…</p>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="alert" aria-live="polite">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+/* ===================================================
+   STATE
+=================================================== */
+let rawData = [], filteredData = [], headers = [];
+let chartType = 'bar', myChart = null, currentView = 'chart';
+
+const COLOR_SCHEMES = {
+  professional: ['185FA5','378ADD','0C447C','85B7EB','1D9E75','5DCAA5','B5D4F4','9FE1CB'],
+  vibrant:      ['E24B4A','EF9F27','1D9E75','378ADD','7F77DD','D4537E','D85A30','639922'],
+  pastel:       ['85B7EB','9FE1CB','F5C4B3','FAC775','AFA9EC','F4C0D1','C0DD97','D3D1C7'],
+  monochrome:   ['0C447C','185FA5','378ADD','5A9FD4','85B7EB','B5D4F4','D6E8F8','EBF3FC'],
+  sunset:       ['D85A30','EF9F27','993C1D','BA7517','A32D2D','F0997B','FAC775','E24B4A'],
+  forest:       ['3B6D11','1D9E75','639922','0F6E56','97C459','5DCAA5','27500A','085041'],
+  executive:    ['1E293B','334155','475569','64748B','0C447C','185FA5','378ADD','85B7EB']
+};
+
+function getColors() {
+  return COLOR_SCHEMES[document.getElementById('colorScheme').value] || COLOR_SCHEMES.professional;
+}
+
+/* ===================================================
+   UI HELPERS
+=================================================== */
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.className = 'toast', 3000);
+}
+
+function showLoading(msg = 'Working…') {
+  document.getElementById('loadingMsg').textContent = msg;
+  document.getElementById('loading').classList.add('show');
+}
+
+function hideLoading() {
+  document.getElementById('loading').classList.remove('show');
+}
+
+/* ===================================================
+   FILE LOADING
+=================================================== */
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+dz.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('fileInput').click(); });
+
+function loadFile(file) {
+  showLoading('Reading file…');
+  const reader = new FileReader();
+  const isCsv = file.name.toLowerCase().endsWith('.csv');
+  reader.onload = e => {
+    try {
+      const wb = isCsv
+        ? XLSX.read(e.target.result, { type: 'string' })
+        : XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!json.length) { showToast('File appears empty', true); hideLoading(); return; }
+
+      rawData = json;
+      filteredData = [...json];
+      headers = Object.keys(json[0]);
+
+      populateFields();
+      buildStats();
+      buildTable();
+
+      document.getElementById('renderBtn').disabled = false;
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('statsRow').style.display = 'grid';
+      document.getElementById('fieldSection').style.display = 'block';
+      document.getElementById('filterWrap').style.display = 'flex';
+      document.getElementById('viewToggle').style.display = 'flex';
+
+      const badge = document.getElementById('fileBadge');
+      document.getElementById('fileBadgeText').textContent = `${file.name}  ·  ${json.length.toLocaleString()} rows  ·  ${headers.length} cols`;
+      badge.classList.add('show');
+
+      renderChart();
+      hideLoading();
+      showToast(`Loaded ${json.length.toLocaleString()} rows from ${file.name}`);
+    } catch (err) {
+      hideLoading();
+      showToast('Error reading file: ' + err.message, true);
+    }
+  };
+  if (isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+/* ===================================================
+   FIELD POPULATION
+=================================================== */
+function populateFields() {
+  const xf = document.getElementById('xField');
+  const yf = document.getElementById('yField');
+  const gf = document.getElementById('groupField');
+  xf.innerHTML = yf.innerHTML = '';
+  gf.innerHTML = '<option value="">— None —</option>';
+
+  // Detect column types
+  const sample = rawData.slice(0, 20);
+  const numericCols = headers.filter(h => sample.filter(r => r[h] !== '').every(r => !isNaN(parseFloat(r[h]))));
+  const categoricalCols = headers.filter(h => !numericCols.includes(h));
+
+  headers.forEach(h => {
+    xf.innerHTML += `<option value="${h}">${h}</option>`;
+    yf.innerHTML += `<option value="${h}">${h}</option>`;
+    gf.innerHTML += `<option value="${h}">${h}</option>`;
+  });
+
+  if (categoricalCols.length) xf.value = categoricalCols[0];
+  if (numericCols.length) yf.value = numericCols[0];
+
+  [xf, yf, gf].forEach(s => s.addEventListener('change', renderChart));
+}
+
+/* ===================================================
+   AGGREGATION
+=================================================== */
+function aggregate(data, xField, yField, method) {
+  const map = {};
+  data.forEach(r => {
+    const k = String(r[xField] ?? '');
+    const v = parseFloat(r[yField]);
+    if (!map[k]) map[k] = { sum: 0, count: 0, vals: [] };
+    if (!isNaN(v)) { map[k].sum += v; map[k].count++; map[k].vals.push(v); }
+  });
+  const labels = Object.keys(map).slice(0, 60);
+  const values = labels.map(l => {
+    const d = map[l];
+    switch (method) {
+      case 'avg':   return d.count ? +(d.sum / d.count).toFixed(4) : 0;
+      case 'count': return d.count;
+      case 'max':   return d.vals.length ? Math.max(...d.vals) : 0;
+      case 'min':   return d.vals.length ? Math.min(...d.vals) : 0;
+      default:      return +d.sum.toFixed(4);
+    }
+  });
+  return { labels, values };
+}
+
+/* ===================================================
+   FILTER
+=================================================== */
+function applyFilter() {
+  const q = document.getElementById('filterInput').value.trim();
+  if (!q) { filteredData = [...rawData]; }
+  else {
+    const low = q.toLowerCase();
+    const gtM = q.match(/^>(\s*)(-?\d+\.?\d*)$/);
+    const ltM = q.match(/^<(\s*)(-?\d+\.?\d*)$/);
+    const eqM = q.match(/^=(\s*)(-?\d+\.?\d*)$/);
+    filteredData = rawData.filter(row => {
+      const vals = Object.values(row).map(v => String(v).toLowerCase());
+      if (gtM) return vals.some(v => parseFloat(v) > parseFloat(gtM[2]));
+      if (ltM) return vals.some(v => parseFloat(v) < parseFloat(ltM[2]));
+      if (eqM) return vals.some(v => parseFloat(v) === parseFloat(eqM[2]));
+      return vals.some(v => v.includes(low));
+    });
+  }
+  buildStats();
+  buildTable();
+  renderChart();
+}
+
+/* ===================================================
+   STATS CARDS
+=================================================== */
+function buildStats() {
+  const yf = document.getElementById('yField')?.value;
+  const numVals = yf ? filteredData.map(r => parseFloat(r[yf])).filter(v => !isNaN(v)) : [];
+  const sum = numVals.reduce((a, b) => a + b, 0);
+  const avg = numVals.length ? sum / numVals.length : 0;
+  const max = numVals.length ? Math.max(...numVals) : 0;
+  const min = numVals.length ? Math.min(...numVals) : 0;
+  const fmt = v => isFinite(v) ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—';
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card"><div class="lbl">Rows</div><div class="val">${filteredData.length.toLocaleString()}</div><div class="sub">of ${rawData.length.toLocaleString()} total</div></div>
+    <div class="stat-card"><div class="lbl">Sum${yf ? ' · ' + yf : ''}</div><div class="val">${fmt(sum)}</div></div>
+    <div class="stat-card"><div class="lbl">Average${yf ? ' · ' + yf : ''}</div><div class="val">${fmt(avg)}</div></div>
+    <div class="stat-card"><div class="lbl">Max / Min</div><div class="val">${fmt(max)}</div><div class="sub">min: ${fmt(min)}</div></div>
+  `;
+}
+
+/* ===================================================
+   DATA TABLE
+=================================================== */
+function buildTable() {
+  const preview = filteredData.slice(0, 100);
+  let html = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+  preview.forEach(r => { html += `<tr>${headers.map(h => `<td>${r[h] ?? ''}</td>`).join('')}</tr>`; });
+  html += '</tbody>';
+  document.getElementById('dataTable').innerHTML = html;
+  document.getElementById('rowBadge').textContent = `${filteredData.length.toLocaleString()} rows`;
+  document.getElementById('tableCard').style.display = currentView === 'table' ? 'block' : 'none';
+}
+
+/* ===================================================
+   VIEW TOGGLE
+=================================================== */
+function toggleView(v) {
+  currentView = v;
+  document.getElementById('vChart').classList.toggle('active', v === 'chart');
+  document.getElementById('vTable').classList.toggle('active', v === 'table');
+  document.getElementById('chartCard').style.display = v === 'chart' && myChart ? 'block' : 'none';
+  document.getElementById('tableCard').style.display = v === 'table' ? 'block' : 'none';
+}
+
+/* ===================================================
+   CHART TYPE SELECTOR
+=================================================== */
+function setChart(t, btn) {
+  chartType = t;
+  document.querySelectorAll('.type-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
+  btn.classList.add('active');
+  btn.setAttribute('aria-pressed', 'true');
+  if (rawData.length) renderChart();
+}
+
+/* ===================================================
+   RENDER CHART
+=================================================== */
+function renderChart() {
+  if (!filteredData.length) return;
+  const xField  = document.getElementById('xField').value;
+  const yField  = document.getElementById('yField').value;
+  const grpField = document.getElementById('groupField').value;
+  const aggMethod = document.getElementById('aggMethod').value;
+  const title   = document.getElementById('chartTitle').value || `${yField} by ${xField}`;
+  const showLegend = document.getElementById('showLegend').checked;
+  const showGrid   = document.getElementById('showGrid').checked;
+  const showValues = document.getElementById('showValues').checked;
+  const colors = getColors();
+
+  document.getElementById('chartTitleDisplay').textContent = title;
+  document.getElementById('chartBadge').textContent = chartType.replace(/([A-Z])/g, ' $1').trim();
+  document.getElementById('chartCard').style.display = 'block';
+  document.getElementById('tableCard').style.display = currentView === 'table' ? 'block' : 'none';
+
+  if (myChart) { myChart.destroy(); myChart = null; }
+  const ctx = document.getElementById('myChart').getContext('2d');
+
+  let labels, datasets;
+  const isCircular = ['pie','doughnut'].includes(chartType);
+  const gridColor  = 'rgba(100,116,139,0.1)';
+
+  if (grpField) {
+    // Grouped datasets
+    const groups = [...new Set(filteredData.map(r => String(r[grpField])))].slice(0, 8);
+    const xlabels = [...new Set(filteredData.map(r => String(r[xField])))].slice(0, 40);
+    datasets = groups.map((g, i) => {
+      const data = xlabels.map(xl => {
+        const rows = filteredData.filter(r => String(r[xField]) === xl && String(r[grpField]) === g);
+        if (!rows.length) return 0;
+        const vals = rows.map(r => parseFloat(r[yField])).filter(v => !isNaN(v));
+        if (!vals.length) return 0;
+        switch (aggMethod) {
+          case 'avg':   return +(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(4);
+          case 'count': return vals.length;
+          case 'max':   return Math.max(...vals);
+          case 'min':   return Math.min(...vals);
+          default:      return +vals.reduce((a,b)=>a+b,0).toFixed(4);
+        }
+      });
+      const c = '#' + colors[i % colors.length];
+      return {
+        label: g, data,
+        backgroundColor: c + (chartType==='line'||chartType==='area' ? '33' : 'CC'),
+        borderColor: c, borderWidth: 2,
+        fill: chartType === 'area', tension: 0.3, pointRadius: 3
+      };
+    });
+    labels = xlabels;
+  } else if (chartType === 'scatter') {
+    const pts = filteredData.slice(0, 500).map(r => ({ x: parseFloat(r[xField])||0, y: parseFloat(r[yField])||0 }));
+    labels = [];
+    datasets = [{ label: `${xField} vs ${yField}`, data: pts, backgroundColor: '#' + colors[0] + 'BB', borderColor: '#' + colors[0], borderWidth: 1, pointRadius: 4 }];
+  } else {
+    const { labels: lbs, values: vals } = aggregate(filteredData, xField, yField, aggMethod);
+    labels = lbs;
+    const bgs = isCircular
+      ? colors.slice(0, lbs.length).map(c => '#' + c + 'CC')
+      : colors.slice(0, lbs.length).map(c => '#' + c + 'BB');
+    datasets = [{
+      label: yField, data: vals,
+      backgroundColor: bgs,
+      borderColor: isCircular ? colors.slice(0, lbs.length).map(c => '#' + c) : '#' + colors[0],
+      borderWidth: isCircular ? 2 : 1,
+      fill: chartType === 'area', tension: 0.3, pointRadius: 3
+    }];
+  }
+
+  const isHoriz = chartType === 'horizontalBar';
+  const cjsType = chartType === 'area' ? 'line'
+                : chartType === 'horizontalBar' ? 'bar'
+                : chartType;
+
+  const datalabelsPlugin = showValues ? {
+    display: true,
+    color: '#1a2332',
+    font: { size: 10, weight: '600' },
+    formatter: v => {
+      if (typeof v === 'object') return v.y?.toLocaleString() ?? '';
+      return typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 1 }) : v;
+    },
+    anchor: isCircular ? 'center' : 'end',
+    align: isCircular ? 'center' : 'end',
+    offset: 4,
+    padding: 2
+  } : false;
+
+  myChart = new Chart(ctx, {
+    type: cjsType,
+    data: { labels, datasets },
+    options: {
+      indexAxis: isHoriz ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: { display: showLegend, position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed?.y ?? ctx.parsed;
+              const fmt = typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : v;
+              return `  ${ctx.dataset.label}: ${fmt}`;
+            }
+          }
+        },
+        datalabels: datalabelsPlugin
+      },
+      scales: isCircular || chartType === 'radar' ? {} : {
+        x: {
+          grid: { display: showGrid && isHoriz, color: gridColor },
+          ticks: { font: { size: 10 }, maxRotation: 45 }
+        },
+        y: {
+          grid: { display: showGrid && !isHoriz, color: gridColor },
+          ticks: { font: { size: 10 }, callback: v => typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 1 }) : v }
+        }
+      }
+    }
+  });
+
+  if (currentView === 'chart') document.getElementById('chartCard').style.display = 'block';
+}
+
+/* ===================================================
+   EXPORT — PNG
+=================================================== */
+function exportPNG() {
+  if (!myChart) { showToast('Render a chart first', true); return; }
+  const link = document.createElement('a');
+  link.download = 'chart.png';
+  link.href = myChart.toBase64Image('image/png', 1);
+  link.click();
+  showToast('PNG exported');
+}
+
+/* ===================================================
+   EXPORT — CSV
+=================================================== */
+function exportCSV() {
+  if (!filteredData.length) { showToast('No data loaded', true); return; }
+  const esc = v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s; };
+  const rows = [headers.map(esc).join(','), ...filteredData.map(r => headers.map(h => esc(r[h])).join(','))];
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  saveAs(blob, 'data-export.csv');
+  showToast(`CSV exported — ${filteredData.length.toLocaleString()} rows`);
+}
+
+/* ===================================================
+   EXPORT — PowerPoint
+=================================================== */
+async function exportPPTX() {
+  if (!myChart) { showToast('Render a chart first', true); return; }
+  showLoading('Building PowerPoint…');
+  try {
+    const xField  = document.getElementById('xField').value;
+    const yField  = document.getElementById('yField').value;
+    const aggMethod = document.getElementById('aggMethod').value;
+    const title   = document.getElementById('chartTitle').value || `${yField} by ${xField}`;
+    const colors  = getColors();
+    const scheme  = document.getElementById('colorScheme').value;
+    const { labels, values } = aggregate(filteredData, xField, yField, aggMethod);
+
+    const pres = new PptxGenJS();
+    pres.layout  = 'LAYOUT_WIDE';
+    pres.author  = 'Data Analysis Studio';
+    pres.title   = title;
+    pres.subject = 'Data Report';
+
+    const NAVY   = '0C447C';
+    const BLUE   = '185FA5';
+    const MID    = '378ADD';
+    const WHITE  = 'FFFFFF';
+    const LGRAY  = 'F1F5F9';
+    const MGRAY  = '64748B';
+
+    /* ── Slide 1: Title ──────────────────────── */
+    const s1 = pres.addSlide();
+    s1.background = { color: NAVY };
+    s1.addShape(pres.shapes.RECTANGLE, { x: 0, y: 5.8, w: 13.33, h: 1.7, fill: { color: BLUE }, line: { color: BLUE } });
+    s1.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 0.12, h: 7.5, fill: { color: MID }, line: { color: MID } });
+    s1.addText(title, {
+      x: 0.5, y: 1.8, w: 12.3, h: 1.4,
+      fontSize: 40, bold: true, color: WHITE, fontFace: 'Calibri',
+      align: 'center', valign: 'middle'
+    });
+    s1.addText(`${chartType.replace(/([A-Z])/g,' $1').trim()} Analysis  ·  ${xField} vs ${yField}`, {
+      x: 0.5, y: 3.3, w: 12.3, h: 0.6,
+      fontSize: 17, color: 'B5D4F4', italic: true, fontFace: 'Calibri', align: 'center'
+    });
+    s1.addText([
+      { text: `${filteredData.length.toLocaleString()} rows`, options: { bold: true } },
+      { text: `  ·  ${headers.length} columns  ·  Generated ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}` }
+    ], { x: 0.5, y: 6.0, w: 12.3, h: 0.5, fontSize: 13, color: 'B5D4F4', fontFace: 'Calibri', align: 'center' });
+
+    /* ── Slide 2: Chart (native PPTX chart) ─── */
+    const s2 = pres.addSlide();
+    s2.background = { color: LGRAY };
+    s2.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: NAVY }, line: { color: NAVY } });
+    s2.addText(title, { x: 0.35, y: 0.15, w: 12.6, h: 0.7, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri', margin: 0 });
+    s2.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: 1.15, w: 12.73, h: 5.8, fill: { color: WHITE }, line: { color: 'E2E6EC', pt: 0.5 }, shadow: { type: 'outer', blur: 6, offset: 2, angle: 135, color: '000000', opacity: 0.07 } });
+
+    const chartColors = colors.slice(0, Math.min(labels.length, 8));
+    const isCircular = ['pie','doughnut'].includes(chartType);
+    const cjsTypeMap = { bar:'bar', horizontalBar:'bar', line:'line', area:'line', pie:'pie', doughnut:'doughnut', radar:'radar', scatter:'scatter' };
+    const nativeType = pres.charts[({bar:'BAR',horizontalBar:'BAR',line:'LINE',area:'LINE',pie:'PIE',doughnut:'DOUGHNUT',radar:'RADAR',scatter:'SCATTER'})[chartType]] || pres.charts.BAR;
+
+    const chartData = [{
+      name: yField,
+      labels: labels.slice(0, 20),
+      values: values.slice(0, 20)
+    }];
+    const chartOpts = {
+      x: 0.4, y: 1.25, w: 12.53, h: 5.6,
+      chartColors,
+      chartArea: { fill: { color: WHITE }, roundedCorners: false },
+      showTitle: false,
+      showLegend: false,
+      valAxisLabelColor: MGRAY,
+      catAxisLabelColor: MGRAY,
+      valGridLine: { color: 'E2E6EC', size: 0.5 },
+      catGridLine: { style: 'none' },
+      dataLabelColor: '1A2332',
+      showValue: document.getElementById('showValues').checked,
+      dataLabelPosition: 'outEnd'
+    };
+    if (chartType === 'horizontalBar') chartOpts.barDir = 'bar';
+    if (chartType === 'bar') chartOpts.barDir = 'col';
+    if (chartType === 'line' || chartType === 'area') { chartOpts.lineSize = 2; chartOpts.lineSmooth = true; }
+    if (isCircular) { chartOpts.showPercent = true; chartOpts.showLegend = true; chartOpts.legendPos = 'r'; }
+    if (chartType === 'radar') { chartOpts.showLegend = true; }
+
+    s2.addChart(nativeType, chartData, chartOpts);
+
+    /* ── Slide 3: Data Summary Table ─────────── */
+    const s3 = pres.addSlide();
+    s3.background = { color: LGRAY };
+    s3.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: NAVY }, line: { color: NAVY } });
+    s3.addText(`Data Summary — ${xField} vs ${yField}`, { x: 0.35, y: 0.15, w: 12.6, h: 0.7, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri', margin: 0 });
+
+    const total = values.reduce((a, b) => a + b, 0);
+    const tableData = [
+      [
+        { text: xField, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11 } },
+        { text: `${yField} (${aggMethod})`, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11 } },
+        { text: 'Share %', options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 11 } }
+      ],
+      ...labels.slice(0, 20).map((l, i) => [
+        { text: String(l), options: { color: '1A2332', fill: { color: i % 2 === 0 ? WHITE : LGRAY }, fontSize: 11 } },
+        { text: values[i].toLocaleString(undefined, { maximumFractionDigits: 2 }), options: { color: '1A2332', fill: { color: i % 2 === 0 ? WHITE : LGRAY }, fontSize: 11, align: 'right' } },
+        { text: total ? `${(100 * values[i] / total).toFixed(1)}%` : '—', options: { color: MGRAY, fill: { color: i % 2 === 0 ? WHITE : LGRAY }, fontSize: 11, align: 'right' } }
+      ])
+    ];
+    s3.addTable(tableData, { x: 1.2, y: 1.3, w: 10.93, colW: [5.0, 3.5, 2.43], border: { pt: 0.5, color: 'E2E6EC' }, fontFace: 'Calibri' });
+
+    /* ── Slide 4: Key Stats ───────────────────── */
+    const s4 = pres.addSlide();
+    s4.background = { color: LGRAY };
+    s4.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: NAVY }, line: { color: NAVY } });
+    s4.addText('Key Statistics', { x: 0.35, y: 0.15, w: 12.6, h: 0.7, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri', margin: 0 });
+
+    const numVals = filteredData.map(r => parseFloat(r[yField])).filter(v => !isNaN(v));
+    const statSum = numVals.reduce((a, b) => a + b, 0);
+    const statAvg = numVals.length ? statSum / numVals.length : 0;
+    const statMax = numVals.length ? Math.max(...numVals) : 0;
+    const statMin = numVals.length ? Math.min(...numVals) : 0;
+    const fmt2 = v => v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+    const statCards = [
+      { label: 'Total Rows', val: filteredData.length.toLocaleString(), sub: `of ${rawData.length.toLocaleString()} total` },
+      { label: `Sum (${yField})`, val: fmt2(statSum), sub: '' },
+      { label: `Average (${yField})`, val: fmt2(statAvg), sub: '' },
+      { label: `Max / Min (${yField})`, val: fmt2(statMax), sub: `min: ${fmt2(statMin)}` }
+    ];
+    statCards.forEach((sc, i) => {
+      const x = 0.4 + i * 3.18;
+      s4.addShape(pres.shapes.RECTANGLE, { x, y: 1.4, w: 3.0, h: 2.4, fill: { color: WHITE }, line: { color: 'E2E6EC', pt: 0.5 }, shadow: { type: 'outer', blur: 4, offset: 2, angle: 135, color: '000000', opacity: 0.06 } });
+      s4.addShape(pres.shapes.RECTANGLE, { x, y: 1.4, w: 3.0, h: 0.12, fill: { color: MID }, line: { color: MID } });
+      s4.addText(sc.label, { x: x + 0.15, y: 1.55, w: 2.7, h: 0.4, fontSize: 11, color: MGRAY, fontFace: 'Calibri', bold: true });
+      s4.addText(sc.val,   { x: x + 0.15, y: 1.95, w: 2.7, h: 0.7, fontSize: 26, color: NAVY,  fontFace: 'Calibri', bold: true });
+      if (sc.sub) s4.addText(sc.sub, { x: x + 0.15, y: 2.65, w: 2.7, h: 0.35, fontSize: 10, color: MGRAY, fontFace: 'Calibri' });
+    });
+
+    await pres.writeFile({ fileName: 'data-analysis-report.pptx' });
+    hideLoading();
+    showToast('PowerPoint exported — data-analysis-report.pptx');
+  } catch (err) {
+    hideLoading();
+    showToast('PPTX export failed: ' + err.message, true);
+    console.error(err);
+  }
+}
+
+/* ===================================================
+   EXPORT — Word (.docx)
+=================================================== */
+async function exportWord() {
+  if (!myChart) { showToast('Render a chart first', true); return; }
+  showLoading('Building Word document…');
+  try {
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+            ImageRun, Header, HeadingLevel, AlignmentType, WidthType,
+            ShadingType, BorderStyle, VerticalAlign, PageNumber,
+            TabStopType, TabStopPosition } = docx;
+
+    const xField   = document.getElementById('xField').value;
+    const yField   = document.getElementById('yField').value;
+    const aggMethod = document.getElementById('aggMethod').value;
+    const title    = document.getElementById('chartTitle').value || `${yField} by ${xField}`;
+    const { labels, values } = aggregate(filteredData, xField, yField, aggMethod);
+    const total    = values.reduce((a, b) => a + b, 0);
+
+    // Chart → PNG blob → ArrayBuffer
+    const imgDataUrl  = myChart.toBase64Image('image/png', 1);
+    const imgBase64   = imgDataUrl.replace(/^data:image\/png;base64,/, '');
+    const imgBinary   = atob(imgBase64);
+    const imgArray    = new Uint8Array(imgBinary.length);
+    for (let i = 0; i < imgBinary.length; i++) imgArray[i] = imgBinary.charCodeAt(i);
+    const imgBuffer   = imgArray.buffer;
+
+    // Numeric stats
+    const numVals = filteredData.map(r => parseFloat(r[yField])).filter(v => !isNaN(v));
+    const statSum = numVals.reduce((a, b) => a + b, 0);
+    const statAvg = numVals.length ? statSum / numVals.length : 0;
+    const statMax = numVals.length ? Math.max(...numVals) : 0;
+    const statMin = numVals.length ? Math.min(...numVals) : 0;
+    const fmt2    = v => v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+    // Helper: border object
+    const border = { style: BorderStyle.SINGLE, size: 4, color: 'E2E6EC' };
+    const borders = { top: border, bottom: border, left: border, right: border };
+
+    // Color palette
+    const NAVY_HEX  = '0C447C';
+    const BLUE_HEX  = '185FA5';
+    const LGRAY_HEX = 'F1F5F9';
+    const MGRAY_HEX = '64748B';
+    const WHITE_HEX = 'FFFFFF';
+
+    // Header/footer
+    const docHeader = new Header({
+      children: [
+        new Paragraph({
+          children: [new TextRun({ text: title, color: WHITE_HEX, bold: true, size: 22, font: 'Calibri' })],
+          shading: { fill: NAVY_HEX, type: ShadingType.CLEAR, color: 'auto' },
+          spacing: { before: 80, after: 80 },
+          indent: { left: 360 }
+        })
+      ]
+    });
+
+    // Stats summary table (4 cells)
+    const statsRow = new TableRow({
+      children: [
+        { lbl: 'Total Rows', val: filteredData.length.toLocaleString() },
+        { lbl: `Sum (${yField})`, val: fmt2(statSum) },
+        { lbl: `Average (${yField})`, val: fmt2(statAvg) },
+        { lbl: `Max / Min`, val: `${fmt2(statMax)} / ${fmt2(statMin)}` }
+      ].map(stat => new TableCell({
+        borders,
+        width: { size: 2340, type: WidthType.DXA },
+        shading: { fill: LGRAY_HEX, type: ShadingType.CLEAR, color: 'auto' },
+        margins: { top: 100, bottom: 100, left: 120, right: 120 },
+        children: [
+          new Paragraph({ children: [new TextRun({ text: stat.lbl, size: 18, color: MGRAY_HEX, font: 'Calibri', bold: true })] }),
+          new Paragraph({ children: [new TextRun({ text: stat.val, size: 28, color: NAVY_HEX, font: 'Calibri', bold: true })] })
+        ]
+      }))
+    });
+    const statsTable = new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: [2340, 2340, 2340, 2340],
+      rows: [statsRow]
+    });
+
+    // Data breakdown table
+    const hdrCell = (text) => new TableCell({
+      borders,
+      margins: { top: 80, bottom: 80, left: 120, right: 120 },
+      shading: { fill: NAVY_HEX, type: ShadingType.CLEAR, color: 'auto' },
+      children: [new Paragraph({ children: [new TextRun({ text, bold: true, color: WHITE_HEX, size: 18, font: 'Calibri' })] })]
+    });
+    const dataCell = (text, shade, align) => new TableCell({
+      borders,
+      margins: { top: 60, bottom: 60, left: 120, right: 120 },
+      shading: { fill: shade, type: ShadingType.CLEAR, color: 'auto' },
+      children: [new Paragraph({ alignment: align || AlignmentType.LEFT, children: [new TextRun({ text: String(text), size: 18, font: 'Calibri', color: '1A2332' })] })]
+    });
+
+    const dataRows = labels.slice(0, 30).map((l, i) => new TableRow({
+      children: [
+        dataCell(l, i % 2 === 0 ? WHITE_HEX : LGRAY_HEX),
+        dataCell(values[i].toLocaleString(undefined, { maximumFractionDigits: 2 }), i % 2 === 0 ? WHITE_HEX : LGRAY_HEX, AlignmentType.RIGHT),
+        dataCell(total ? `${(100 * values[i] / total).toFixed(1)}%` : '—', i % 2 === 0 ? WHITE_HEX : LGRAY_HEX, AlignmentType.RIGHT)
+      ]
+    }));
+
+    const breakdownTable = new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: [4680, 2340, 2340],
+      rows: [
+        new TableRow({ children: [hdrCell(xField), hdrCell(`${yField} (${aggMethod})`), hdrCell('Share %')] }),
+        ...dataRows
+      ]
+    });
+
+    // Build document
+    const doc = new Document({
+      styles: {
+        default: { document: { run: { font: 'Calibri', size: 24, color: '1A2332' } } },
+        paragraphStyles: [
+          { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+            run: { size: 36, bold: true, font: 'Calibri', color: NAVY_HEX },
+            paragraph: { spacing: { before: 360, after: 120 }, outlineLevel: 0 } },
+          { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+            run: { size: 28, bold: true, font: 'Calibri', color: BLUE_HEX },
+            paragraph: { spacing: { before: 240, after: 80 }, outlineLevel: 1 } }
+        ]
+      },
+      sections: [{
+        headers: { default: docHeader },
+        properties: {
+          page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } }
+        },
+        children: [
+          // Title
+          new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(title)], alignment: AlignmentType.CENTER, spacing: { before: 480, after: 240 } }),
+
+          // Subtitle line
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 0, after: 360 },
+            children: [new TextRun({ text: `${chartType.replace(/([A-Z])/g,' $1').trim()} Analysis  ·  ${xField} vs ${yField}  ·  ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}`, color: MGRAY_HEX, italics: true, size: 20, font: 'Calibri' })]
+          }),
+
+          // Section: Statistics
+          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun('Key Statistics')], spacing: { before: 360, after: 160 } }),
+          statsTable,
+          new Paragraph({ spacing: { before: 240, after: 0 }, children: [] }),
+
+          // Section: Chart
+          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun('Chart Visualisation')], spacing: { before: 360, after: 160 } }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 0, after: 240 },
+            children: [
+              new ImageRun({
+                data: imgBuffer,
+                transformation: { width: 560, height: 315 },
+                type: 'png',
+                altText: { title: title, description: `${chartType} chart of ${yField} by ${xField}`, name: title }
+              })
+            ]
+          }),
+
+          // Section: Data
+          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(`Data Breakdown — Top ${Math.min(labels.length, 30)} entries`)], spacing: { before: 360, after: 160 } }),
+          breakdownTable,
+          new Paragraph({ spacing: { before: 480 }, children: [] }),
+
+          // Footer note
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: `Report generated by Data Analysis Studio  ·  ${new Date().toLocaleString()}`, color: 'B4B2A9', size: 16, italics: true, font: 'Calibri' })]
+          })
+        ]
+      }]
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, 'data-analysis-report.docx');
+    hideLoading();
+    showToast('Word document exported — data-analysis-report.docx');
+  } catch (err) {
+    hideLoading();
+    showToast('Word export failed: ' + err.message, true);
+    console.error(err);
+  }
+}
+
+/* ===================================================
+   CHART TITLE live update
+=================================================== */
+document.getElementById('chartTitle').addEventListener('input', () => {
+  if (myChart) document.getElementById('chartTitleDisplay').textContent =
+    document.getElementById('chartTitle').value || 'Chart';
+});
+</script>
+</body>
+</html>
