@@ -819,8 +819,8 @@ async function exportPPTX() {
 
     const chartColors = colors.slice(0, Math.min(labels.length, 8));
     const isCircular = ['pie','doughnut'].includes(chartType);
-    const cjsTypeMap = { bar:'bar', horizontalBar:'bar', line:'line', area:'line', pie:'pie', doughnut:'doughnut', radar:'radar', scatter:'scatter' };
-    const nativeType = pres.charts[({bar:'BAR',horizontalBar:'BAR',line:'LINE',area:'LINE',pie:'PIE',doughnut:'DOUGHNUT',radar:'RADAR',scatter:'SCATTER'})[chartType]] || pres.charts.BAR;
+    const pptxTypeMap = { bar:'bar', horizontalBar:'bar', line:'line', area:'area', pie:'pie', doughnut:'doughnut', radar:'radar', scatter:'scatter' };
+    const nativeType = pptxTypeMap[chartType] || 'bar';
 
     const chartData = [{
       name: yField,
